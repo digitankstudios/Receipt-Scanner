@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt Scanner | Finance Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #141416;
+            --bg-tertiary: #1c1c1f;
+            --border: #2a2a2e;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1a6;
+            --text-muted: #6b6b70;
+            --accent: #22c55e;
+            --accent-hover: #16a34a;
+            --accent-glow: rgba(34, 197, 94, 0.15);
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            padding: 32px 0 40px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent) 0%, #15803d 100%);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        .logo svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .upload-zone {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border);
+            border-radius: 20px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .upload-zone.has-image {
+            padding: 0;
+            border-style: solid;
+        }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            background: var(--bg-tertiary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-icon svg {
+            width: 28px;
+            height: 28px;
+            color: var(--text-secondary);
+        }
+
+        .upload-text {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .upload-hint {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .preview-image {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: 18px;
+            display: none;
+        }
+
+        .preview-image.visible {
+            display: block;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: var(--border);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .hidden-input {
+            display: none;
+        }
+
+        .processing-state {
+            display: none;
+            padding: 40px 24px;
+            text-align: center;
+        }
+
+        .processing-state.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .processing-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 32px;
+            animation: slideUp 0.3s ease;
+        }
+
+        .results-section.active {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .result-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .result-row:first-child {
+            padding-top: 0;
+        }
+
+        .result-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .result-value {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .result-value.total {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            color: var(--accent);
+        }
+
+        .result-value.editable {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 15px;
+            color: var(--text-primary);
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .result-value.editable:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea.result-value.editable {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .employee-section {
+            margin-top: 24px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .submit-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 48px 24px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .success-message.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .success-icon {
+            width: 72px;
+            height: 72px;
+            background: var(--accent-glow);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+
+        .success-icon svg {
+            width: 36px;
+            height: 36px;
+            color: var(--accent);
+        }
+
+        .success-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .success-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        .error-banner {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            color: var(--error);
+            font-size: 14px;
+        }
+
+        .error-banner.active {
+            display: block;
+        }
+
+        .config-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .config-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-title svg {
+            width: 18px;
+            height: 18px;
+            color: var(--text-muted);
+        }
+
+        .ocr-debug {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .ocr-debug.visible {
+            display: block;
+        }
+
+        .ocr-debug pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .confidence-high {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--accent);
+        }
+
+        .confidence-medium {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .confidence-low {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+        }
+
+        .footer {
+            margin-top: auto;
+            padding: 24px 0;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .toggle-debug {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 12px;
+            cursor: pointer;
+            text-decoration: underline;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .app-container {
+                padding: 16px;
+            }
+
+            header {
+                padding: 24px 0 32px;
+            }
+
+            .upload-zone {
+                padding: 36px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <h1>Receipt Scanner</h1>
+            <p class="subtitle">Scan receipts for expense tracking</p>
+        </header>
+
+        <main>
+            <div class="config-section">
+                <div class="config-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Google Sheets Setup
+                </div>
+                <div class="input-group">
+                    <label for="webhookUrl">Apps Script Web App URL</label>
+                    <input type="url" id="webhookUrl" placeholder="https://script.google.com/macros/s/..." />
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted);">
+                    Receipt images will be saved to Google Drive automatically.
+                </p>
+            </div>
+
+            <div class="error-banner" id="errorBanner"></div>
+
+            <div id="uploadSection">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-content" id="uploadContent">
+                        <div class="upload-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+                        <p class="upload-text">Tap to scan or upload receipt</p>
+                        <p class="upload-hint">Supports JPG, PNG, HEIC • Max 10MB</p>
+                    </div>
+                    <img class="preview-image" id="previewImage" alt="Receipt preview" />
+                </div>
+
+                <input type="file" id="fileInput" class="hidden-input" accept="image/*" capture="environment" />
+
+                <div class="camera-controls">
+                    <button class="btn btn-secondary" id="cameraBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Camera
+                    </button>
+                    <button class="btn btn-primary" id="scanBtn" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Scan Receipt
+                    </button>
+                </div>
+            </div>
+
+            <div class="processing-state" id="processingState">
+                <div class="spinner"></div>
+                <p class="processing-text" id="processingText">Analyzing receipt...</p>
+            </div>
+
+            <div class="results-section" id="resultsSection">
+                <p class="section-title">Extracted Information</p>
+                <div class="result-card">
+                    <div class="result-row">
+                        <div style="width: 100%">
+                            <p class="result-label">Store Name</p>
+                            <input type="text" class="result-value editable" id="storeName" placeholder="Store name" />
+                        </div>
+                    </div>
+                    <div class="result-row">
+                        <div style="width: 100%">
+                            <p class="result-label">Items / Description</p>
+                            <textarea class="result-value editable" id="itemTypes" placeholder="Item categories or descriptions"></textarea>
+                        </div>
+                    </div>
+                    <div class="result-row">
+                        <div style="width: 100%">
+                            <p class="result-label">
+                                Total Amount
+                                <span class="confidence-badge" id="totalConfidence"></span>
+                            </p>
+                            <input type="text" class="result-value editable" id="totalAmount" placeholder="₱0.00" />
+                        </div>
+                    </div>
+                    <div class="result-row">
+                        <div style="width: 100%">
+                            <p class="result-label">Date (from receipt)</p>
+                            <input type="text" class="result-value editable" id="receiptDate" placeholder="YYYY-MM-DD" />
+                        </div>
+                    </div>
+                </div>
+
+                <button class="toggle-debug" id="toggleDebug">Show scanned text (debug)</button>
+                <div class="ocr-debug" id="ocrDebug">
+                    <pre id="ocrText"></pre>
+                </div>
+
+                <div class="employee-section">
+                    <p class="section-title">Employee Details</p>
+                    <div class="input-group">
+                        <label for="employeeName">Your Name</label>
+                        <input type="text" id="employeeName" placeholder="Enter your full name" />
+                    </div>
+                    <div class="input-group">
+                        <label for="department">Department</label>
+                        <input type="text" id="department" placeholder="e.g., Marketing, Sales, IT" />
+                    </div>
+                    <div class="input-group">
+                        <label for="notes">Notes (Optional)</label>
+                        <input type="text" id="notes" placeholder="Purpose of expense, project code, etc." />
+                    </div>
+                </div>
+
+                <div class="submit-section">
+                    <button class="btn btn-primary" id="submitBtn" style="width: 100%">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Submit to Finance
+                    </button>
+                </div>
+            </div>
+
+            <div class="success-message" id="successMessage">
+                <div class="success-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h2 class="success-title">Receipt Submitted!</h2>
+                <p class="success-subtitle">Your receipt has been sent to the finance team.</p>
+                <button class="btn btn-primary" id="scanAnotherBtn" style="width: 100%">
+                    Scan Another Receipt
+                </button>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>Receipts are processed using OCR</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM Elements
+        const uploadZone = document.getElementById('uploadZone');
+        const uploadContent = document.getElementById('uploadContent');
+        const previewImage = document.getElementById('previewImage');
+        const fileInput = document.getElementById('fileInput');
+        const cameraBtn = document.getElementById('cameraBtn');
+        const scanBtn = document.getElementById('scanBtn');
+        const processingState = document.getElementById('processingState');
+        const processingText = document.getElementById('processingText');
+        const resultsSection = document.getElementById('resultsSection');
+        const successMessage = document.getElementById('successMessage');
+        const errorBanner = document.getElementById('errorBanner');
+        const uploadSection = document.getElementById('uploadSection');
+        const submitBtn = document.getElementById('submitBtn');
+        const scanAnotherBtn = document.getElementById('scanAnotherBtn');
+        const webhookUrl = document.getElementById('webhookUrl');
+        const toggleDebug = document.getElementById('toggleDebug');
+        const ocrDebug = document.getElementById('ocrDebug');
+        const ocrTextEl = document.getElementById('ocrText');
+        const totalConfidence = document.getElementById('totalConfidence');
+
+        // Result fields
+        const storeNameField = document.getElementById('storeName');
+        const itemTypesField = document.getElementById('itemTypes');
+        const totalAmountField = document.getElementById('totalAmount');
+        const receiptDateField = document.getElementById('receiptDate');
+        const employeeNameField = document.getElementById('employeeName');
+        const departmentField = document.getElementById('department');
+        const notesField = document.getElementById('notes');
+
+        let currentImageData = null;
+        let currentImageBase64 = null;
+
+        // Load saved settings
+        const savedWebhook = localStorage.getItem('receiptScannerWebhook');
+        if (savedWebhook) webhookUrl.value = savedWebhook;
+        
+        const savedEmployee = localStorage.getItem('receiptScannerEmployee');
+        if (savedEmployee) employeeNameField.value = savedEmployee;
+        
+        const savedDepartment = localStorage.getItem('receiptScannerDepartment');
+        if (savedDepartment) departmentField.value = savedDepartment;
+
+        // Save settings on change
+        webhookUrl.addEventListener('change', () => {
+            localStorage.setItem('receiptScannerWebhook', webhookUrl.value);
+        });
+        employeeNameField.addEventListener('change', () => {
+            localStorage.setItem('receiptScannerEmployee', employeeNameField.value);
+        });
+        departmentField.addEventListener('change', () => {
+            localStorage.setItem('receiptScannerDepartment', departmentField.value);
+        });
+
+        // Toggle debug view
+        toggleDebug.addEventListener('click', () => {
+            ocrDebug.classList.toggle('visible');
+            toggleDebug.textContent = ocrDebug.classList.contains('visible') 
+                ? 'Hide scanned text' 
+                : 'Show scanned text (debug)';
+        });
+
+        // Event Listeners
+        uploadZone.addEventListener('click', () => fileInput.click());
+        cameraBtn.addEventListener('click', () => {
+            fileInput.setAttribute('capture', 'environment');
+            fileInput.click();
+        });
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        scanBtn.addEventListener('click', processReceipt);
+        submitBtn.addEventListener('click', submitToSheets);
+        scanAnotherBtn.addEventListener('click', resetForm);
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showError('Please select an image file.');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                showError('File size must be less than 10MB.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentImageData = e.target.result;
+                currentImageBase64 = e.target.result.split(',')[1]; // Store base64 for upload
+                previewImage.src = currentImageData;
+                previewImage.classList.add('visible');
+                uploadContent.style.display = 'none';
+                uploadZone.classList.add('has-image');
+                scanBtn.disabled = false;
+                hideError();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function processReceipt() {
+            if (!currentImageData) return;
+
+            showProcessing('Initializing OCR engine...');
+            uploadSection.style.display = 'none';
+            
+            try {
+                showProcessing('Reading receipt text...');
+                
+                const result = await Tesseract.recognize(currentImageData, 'eng', {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            const progress = Math.round(m.progress * 100);
+                            showProcessing(`Reading receipt... ${progress}%`);
+                        }
+                    }
+                });
+
+                const ocrText = result.data.text;
+                console.log('OCR Text:', ocrText);
+                ocrTextEl.textContent = ocrText;
+
+                showProcessing('Extracting information...');
+
+                // Extract data using improved regex patterns
+                const extractedData = extractReceiptData(ocrText);
+                
+                // Populate fields
+                storeNameField.value = extractedData.storeName || '';
+                itemTypesField.value = extractedData.items || '';
+                totalAmountField.value = extractedData.total || '';
+                receiptDateField.value = extractedData.date || '';
+
+                // Show confidence badge
+                if (extractedData.totalConfidence) {
+                    totalConfidence.textContent = extractedData.totalConfidence;
+                    totalConfidence.className = 'confidence-badge confidence-' + extractedData.totalConfidence.toLowerCase();
+                } else {
+                    totalConfidence.textContent = '';
+                    totalConfidence.className = 'confidence-badge';
+                }
+
+                hideProcessing();
+                resultsSection.classList.add('active');
+
+            } catch (error) {
+                console.error('Processing error:', error);
+                showError('Failed to process receipt. Please try again or enter details manually.');
+                hideProcessing();
+                uploadSection.style.display = 'block';
+                resultsSection.classList.add('active');
+            }
+        }
+
+        function extractReceiptData(text) {
+            const result = {
+                storeName: '',
+                items: '',
+                total: '',
+                date: '',
+                totalConfidence: ''
+            };
+
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            // ===== STORE NAME =====
+            // Usually the first few non-empty lines, often in caps
+            // Skip common receipt headers
+            const skipPatterns = /^(official|receipt|invoice|tax|vat|tin|date|time|cashier|terminal|\d{2}[\/\-]\d{2})/i;
+            for (let i = 0; i < Math.min(5, lines.length); i++) {
+                const line = lines[i];
+                if (line.length > 3 && !skipPatterns.test(line) && !/^\d+$/.test(line)) {
+                    result.storeName = line;
+                    break;
+                }
+            }
+
+            // ===== TOTAL AMOUNT =====
+            // Try multiple patterns, from most specific to least
+            const totalPatterns = [
+                // Philippine formats
+                { regex: /(?:TOTAL|GRAND\s*TOTAL|AMOUNT\s*DUE|TOTAL\s*DUE|TOTAL\s*AMOUNT|NET\s*AMOUNT|CASH|TENDERED)[\s:]*[₱P]?\s*([\d,]+\.?\d{0,2})/i, confidence: 'High' },
+                { regex: /(?:TOTAL|GRAND\s*TOTAL)[\s:]+(\d[\d,]*\.?\d{0,2})/i, confidence: 'High' },
+                // Look for peso symbol followed by large number
+                { regex: /[₱P]\s*([\d,]+\.\d{2})(?:\s|$)/g, confidence: 'Medium', findLargest: true },
+                // Number after TOTAL on same or next line
+                { regex: /TOTAL[\s\S]{0,20}?([\d,]+\.\d{2})/i, confidence: 'Medium' },
+                // Any decimal number (find the largest as likely total)
+                { regex: /([\d,]+\.\d{2})/g, confidence: 'Low', findLargest: true },
+            ];
+
+            for (const pattern of totalPatterns) {
+                if (pattern.findLargest) {
+                    // Find all matches and pick the largest
+                    const matches = [...text.matchAll(pattern.regex)];
+                    if (matches.length > 0) {
+                        let largest = 0;
+                        let largestMatch = '';
+                        for (const match of matches) {
+                            const num = parseFloat(match[1].replace(/,/g, ''));
+                            if (num > largest && num < 1000000) { // Sanity check
+                                largest = num;
+                                largestMatch = match[1];
+                            }
+                        }
+                        if (largest > 0) {
+                            result.total = '₱' + largestMatch;
+                            result.totalConfidence = pattern.confidence;
+                            break;
+                        }
+                    }
+                } else {
+                    const match = text.match(pattern.regex);
+                    if (match && match[1]) {
+                        const num = parseFloat(match[1].replace(/,/g, ''));
+                        if (num > 0 && num < 1000000) {
+                            result.total = '₱' + match[1];
+                            result.totalConfidence = pattern.confidence;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // ===== DATE =====
+            const datePatterns = [
+                // YYYY-MM-DD or YYYY/MM/DD
+                { regex: /(\d{4}[-\/]\d{2}[-\/]\d{2})/, format: 'iso' },
+                // MM/DD/YYYY or MM-DD-YYYY
+                { regex: /(\d{2}[-\/]\d{2}[-\/]\d{4})/, format: 'mdy' },
+                // DD/MM/YYYY or DD-MM-YYYY (common in PH)
+                { regex: /(\d{2}[-\/]\d{2}[-\/]\d{4})/, format: 'dmy' },
+                // MM/DD/YY or MM-DD-YY
+                { regex: /(\d{2}[-\/]\d{2}[-\/]\d{2})(?!\d)/, format: 'short' },
+                // Month name formats: Jan 15, 2024 or 15 Jan 2024
+                { regex: /(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*[,]?\s*(\d{4})/i, format: 'textdmy' },
+                { regex: /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*(\d{1,2})[,]?\s*(\d{4})/i, format: 'textmdy' },
+            ];
+
+            for (const pattern of datePatterns) {
+                const match = text.match(pattern.regex);
+                if (match) {
+                    result.date = match[0];
+                    break;
+                }
+            }
+
+            // ===== ITEMS =====
+            // Try to find item lines (lines with prices)
+            const itemLines = [];
+            const itemPattern = /^(.+?)\s+[₱P]?\s*[\d,]+\.?\d{0,2}\s*$/;
+            
+            for (const line of lines) {
+                // Skip header/footer type lines
+                if (/^(TOTAL|SUBTOTAL|VAT|TAX|CASH|CHANGE|THANK|RECEIPT|OFFICIAL)/i.test(line)) continue;
+                
+                const match = line.match(itemPattern);
+                if (match && match[1].length > 2 && match[1].length < 50) {
+                    itemLines.push(match[1].trim());
+                }
+            }
+
+            if (itemLines.length > 0) {
+                // Summarize items
+                if (itemLines.length <= 5) {
+                    result.items = itemLines.join(', ');
+                } else {
+                    result.items = itemLines.slice(0, 4).join(', ') + ` (+${itemLines.length - 4} more items)`;
+                }
+            } else {
+                result.items = 'Please enter items manually';
+            }
+
+            return result;
+        }
+
+        async function submitToSheets() {
+            const webhook = webhookUrl.value.trim();
+            
+            if (!webhook) {
+                showError('Please enter your Google Apps Script Web App URL.');
+                return;
+            }
+
+            if (!employeeNameField.value.trim()) {
+                showError('Please enter your name.');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner" style="width:20px;height:20px;margin:0;border-width:2px"></span> Submitting...';
+
+            const data = {
+                timestamp: new Date().toISOString(),
+                employeeName: employeeNameField.value.trim(),
+                department: departmentField.value.trim(),
+                storeName: storeNameField.value.trim(),
+                items: itemTypesField.value.trim(),
+                total: totalAmountField.value.trim(),
+                receiptDate: receiptDateField.value.trim(),
+                notes: notesField.value.trim(),
+                imageBase64: currentImageBase64 // Include the image
+            };
+
+            try {
+                const response = await fetch(webhook, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                resultsSection.classList.remove('active');
+                successMessage.classList.add('active');
+
+            } catch (error) {
+                console.error('Submit error:', error);
+                showError('Failed to submit. Please check your webhook URL and try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Submit to Finance
+                `;
+            }
+        }
+
+        function resetForm() {
+            currentImageData = null;
+            currentImageBase64 = null;
+            previewImage.src = '';
+            previewImage.classList.remove('visible');
+            uploadContent.style.display = 'block';
+            uploadZone.classList.remove('has-image');
+            scanBtn.disabled = true;
+            fileInput.value = '';
+            
+            storeNameField.value = '';
+            itemTypesField.value = '';
+            totalAmountField.value = '';
+            receiptDateField.value = '';
+            notesField.value = '';
+            ocrTextEl.textContent = '';
+            ocrDebug.classList.remove('visible');
+            toggleDebug.textContent = 'Show scanned text (debug)';
+            totalConfidence.textContent = '';
+            totalConfidence.className = 'confidence-badge';
+            
+            resultsSection.classList.remove('active');
+            successMessage.classList.remove('active');
+            uploadSection.style.display = 'block';
+            hideError();
+        }
+
+        function showProcessing(text) {
+            processingText.textContent = text;
+            processingState.classList.add('active');
+        }
+
+        function hideProcessing() {
+            processingState.classList.remove('active');
+        }
+
+        function showError(message) {
+            errorBanner.textContent = message;
+            errorBanner.classList.add('active');
+        }
+
+        function hideError() {
+            errorBanner.classList.remove('active');
+        }
+    </script>
+</body>
+</html>
